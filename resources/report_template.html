@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>$app_name · 检测报告</title>
+<style>body{font:14px/1.7 'Microsoft YaHei',sans-serif;color:#24334b;background:#f3f6fa;margin:0}main{max-width:1180px;margin:32px auto;padding:36px;background:white;border-radius:16px}h1{font-size:26px}h2{margin-top:34px;font-size:20px;color:#176d69}.meta{color:#66758a}.score{padding:24px;background:#e8f5f1;border-radius:12px;font-size:22px}.score strong{font-size:42px;color:#126e64}table{border-collapse:collapse;width:100%;margin:16px 0;font-size:12px}th,td{text-align:left;padding:10px;border-bottom:1px solid #dde5ef;overflow-wrap:anywhere}th{background:#edf2f7}tr:nth-child(even){background:#fafbfd}.scroll{overflow:auto}.note{padding:16px;background:#f6f8fb;border-left:3px solid #147d73}@media print{body{background:white}main{margin:0;padding:0}thead{display:table-header-group}tr{break-inside:avoid}h2{break-after:avoid}}</style></head>
+<body><main><p class="meta">本地数据质量报告 · DataClean Inspector</p><h1>$app_name</h1><p class="meta">检测时间：$detected_at　文件：$filename　工作表：$sheet</p>
+<div class="score">质量评分 <strong>$score</strong> / 100　$rating</div>
+<p>数据规模：$rows 行 × $columns 列　问题项：$issue_count　缺失单元格：$missing　重复行：$duplicates　数值异常：$outliers</p>
+<h2>一、评分组成</h2><table><thead><tr><th>维度</th><th>维度得分</th><th>权重</th><th>加权扣分</th></tr></thead><tbody>$dimensions</tbody></table>
+<p class="note">完整性 = 100 × (1 − 缺失单元格/总单元格)；唯一性 = 100 × (1 − 多余重复行/总行数)；一致性 = 100 × (1 − 首尾空格、类型错误、日期错误的去重单元格/总单元格)；有效性 = 100 × (1 − IQR 异常单元格/总单元格)。总分为四维加权和，限制在 0–100；无数据时评分为 0（无数据）。提示、高缺失率及空字符串规则不重复扣分。评级：≥90 优秀，≥80 良好，≥70 一般，≥60 较差，其余严重。</p>
+<h2>二、字段质量、缺失、异常与类型</h2><div class="scroll">$field_table</div>
+<h2>三、主要问题与建议清洗措施</h2><p>问题项按规则和字段聚合，同一单元格可能对应多项规则。重复行数量不包含每组第一条。行号为当前数据位置，从 1 开始，不包含表头；每项报告最多展示前 50 个行号，软件详情中可分页查看全部。高缺失阈值：$threshold；IQR 系数：$factor。唯一值与常量列提示需结合业务判断。</p>
+<div class="scroll"><table><thead><tr><th>类型</th><th>字段</th><th>级别</th><th>影响数量</th><th>数据行号</th><th>描述</th><th>建议</th></tr></thead><tbody>$issues</tbody></table></div>
+<h2>四、清洗前后对比</h2>$comparison<p class="meta">原始数据指本次打开时的数据，前后评分使用当前相同的检测阈值。异常值由分布自动推断，需人工核实；删除数据后分布及 IQR 区间可能变化。</p>
+<footer class="meta">本报告完全在本地生成，无外部字体、脚本或网络依赖。可使用浏览器打印功能另存为 PDF。</footer></main></body></html>
