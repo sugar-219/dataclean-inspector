@@ -1,0 +1,28 @@
+.venv/
+__pycache__/
+.pytest_cache/
+build/
+dist/
+logs/
+config.json
+*.spec
+verification/
+.matplotlib/
+
+# Local releases and delivery-only tools
+/release_v1.0/
+/scripts/freeze_v1.py
+/scripts/verify_frozen.py
+/tests/test_delivery_scripts.py
+
+# Local upload artifact and working notes
+/GitHub上传包.zip
+/task_plan.md
+/findings.md
+/progress.md
+
+# Editor and operating system files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
