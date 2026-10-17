@@ -10,6 +10,9 @@ verification/
 .matplotlib/
 
 # Local releases and delivery-only tools
+/本地资料/
+/软著材料/
+/文件夹说明.md
 /release_v1.0/
 /scripts/freeze_v1.py
 /scripts/verify_frozen.py
@@ -20,6 +23,8 @@ verification/
 /task_plan.md
 /findings.md
 /progress.md
+/.review*/
+/.change-check*/
 
 # Editor and operating system files
 .idea/

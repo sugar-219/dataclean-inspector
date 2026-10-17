@@ -13,7 +13,7 @@ class CleaningPage(Page):
     undo_requested = Signal()
 
     def __init__(self):
-        super().__init__("数据清洗", "选择操作与字段后执行；每次成功修改后自动重新检测，并保留撤销状态。")
+        super().__init__("数据清洗", "选择操作与字段后预览改动，确认应用后自动重新检测，并保留撤销状态。")
         splitter = QSplitter(Qt.Horizontal)
         splitter.setChildrenCollapsible(False)
         fields = QFrame()

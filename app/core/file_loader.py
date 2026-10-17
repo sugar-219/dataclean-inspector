@@ -32,6 +32,17 @@ def sheet_names(path):
         raise ValueError("Excel 无法读取，文件可能损坏或已加密。") from exc
 
 
+def read_preserving_identifiers(reader, **options):
+    # 先检查原始文本，避免类型推断将 00123 变为 123；检查整列而非仅抽样。
+    raw = reader(dtype=object, **options)
+    text_columns = {
+        col: object for col in raw.columns
+        if raw[col].astype("string").str.fullmatch(r"\s*[+-]?0[0-9]+\s*", na=False).any()
+    }
+    del raw
+    return reader(dtype=text_columns or None, **options)
+
+
 def load_file(path, sheet=None):
     path = validate_file(path)
     encoding = ""
@@ -49,8 +60,9 @@ def load_file(path, sheet=None):
                         delimiter = ","
                     with warnings.catch_warnings():
                         warnings.simplefilter("error", pd.errors.ParserWarning)
-                        frame = pd.read_csv(path, encoding=candidate, sep=delimiter, keep_default_na=False,
-                                            low_memory=False, skip_blank_lines=False, index_col=False)
+                        frame = read_preserving_identifiers(
+                            pd.read_csv, filepath_or_buffer=path, encoding=candidate, sep=delimiter,
+                            keep_default_na=False, low_memory=False, skip_blank_lines=False, index_col=False)
                     encoding = candidate
                     break
                 except UnicodeDecodeError:
@@ -58,8 +70,9 @@ def load_file(path, sheet=None):
             else:
                 raise ValueError("CSV 编码无法识别，请另存为 UTF-8 或 GB18030；不支持同一文件混用编码。")
         else:
-            frame = pd.read_excel(path, sheet_name=sheet if sheet is not None else 0,
-                                  engine="xlrd" if path.suffix.lower() == ".xls" else "openpyxl", keep_default_na=False)
+            frame = read_preserving_identifiers(
+                pd.read_excel, io=path, sheet_name=sheet if sheet is not None else 0,
+                engine="xlrd" if path.suffix.lower() == ".xls" else "openpyxl", keep_default_na=False)
         if frame.empty:
             raise ValueError("文件没有数据记录，请确认包含表头及至少一行数据。")
         # 列名统一为不重复的字符串，保证所有按字段操作有明确对象。

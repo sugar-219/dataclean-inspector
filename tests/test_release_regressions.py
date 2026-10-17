@@ -52,3 +52,34 @@ def test_excel_preserves_large_integer_as_text(tmp_path):
     assert book.active["A2"].value == "9007199254740993"
     assert book.active["A2"].data_type == "s"
     book.close()
+
+
+@pytest.mark.parametrize("suffix", [".csv", ".xlsx"])
+def test_import_preserves_zero_prefixed_identifiers_and_numeric_columns(tmp_path, suffix):
+    path = tmp_path / ("编号" + suffix)
+    original = pd.DataFrame({"编号": ["00123", "00456", "0"], "数量": [1, 2, 3],
+                             "金额": [0.5, 1.25, 0.0]})
+    export_data(original, path)
+    frame, _ = load_file(path)
+    assert frame["编号"].tolist() == original["编号"].tolist()
+    assert pd.api.types.is_numeric_dtype(frame["数量"])
+    assert pd.api.types.is_numeric_dtype(frame["金额"])
+    exported = tmp_path / ("再次导出" + suffix)
+    export_data(frame, exported)
+    assert load_file(exported)[0]["编号"].tolist() == original["编号"].tolist()
+
+
+def test_csv_zero_prefix_detection_checks_beyond_initial_sample(tmp_path):
+    path = tmp_path / "末行编号.csv"
+    path.write_text("编号;名称\n" + "123;甲\n" * 12000 + "00123;乙\n", encoding="utf-8")
+    frame, _ = load_file(path)
+    assert frame["编号"].iloc[0] == "123"
+    assert frame["编号"].iloc[-1] == "00123"
+
+
+@pytest.mark.parametrize("suffix", [".csv", ".xlsx"])
+def test_identifier_protection_keeps_blank_and_signed_values(tmp_path, suffix):
+    path = tmp_path / ("含空编号" + suffix)
+    values = ["00123", "", "-00456", "+00789", " 00012 "]
+    export_data(pd.DataFrame({"编号": values, "数量": range(len(values))}), path)
+    assert load_file(path)[0]["编号"].tolist() == values

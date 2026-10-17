@@ -26,6 +26,7 @@ class CleanResult:
     affected: int
     columns: list
     description: str
+    source_index: pd.Index
 
 
 def parse_rows(text, length):
@@ -209,4 +210,4 @@ def clean_data(frame, operation, columns=None, **params):
             "date_format": "日期格式",
         }
         description += "；" + "，".join(f"{labels.get(k, k)}={v}" for k, v in details.items())
-    return CleanResult(result.reset_index(drop=True), affected, columns, description)
+    return CleanResult(result.reset_index(drop=True), affected, columns, description, result.index)

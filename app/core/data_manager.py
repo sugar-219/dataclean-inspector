@@ -18,6 +18,7 @@ class DataManager:
         self.undo = UndoManager(self.settings.get("undo_limit", 20))
         self.records = []
         self.dirty = False
+        self._saved_frame = self.frame
 
     def load(self, frame, metadata):
         result = detect_quality(frame, self.settings)
@@ -29,6 +30,7 @@ class DataManager:
         self.analysis = analysis
         self.undo.clear()
         self.dirty = False
+        self._saved_frame = self.frame
         self.record("导入文件", f"读取 {metadata.get('name', '')}，工作表：{metadata.get('sheet') or '默认'}", len(frame))
 
     def detect(self, settings=None):
@@ -42,26 +44,35 @@ class DataManager:
 
     def apply(self, operation, columns=None, **params):
         change = clean_data(self.frame, operation, columns, **params)
+        return self.commit_clean(operation, change)
+
+    def commit_clean(self, operation, change):
         if self.frame.equals(change.frame):
             self.record(operation, change.description + "；没有数据变化", 0, change.columns)
             return change
         # 检测或统计失败时不提交状态，原数据及撤销栈保持不变。
         result = detect_quality(change.frame, self.settings)
         analysis = analyze(change.frame)
-        self.undo.push((self.frame, self.dirty))
+        self.undo.push(self.frame)
         self.frame, self.result, self.analysis = change.frame, result, analysis
-        self.dirty = True
+        self.dirty = not self.frame.equals(self._saved_frame)
         self.record(operation, change.description, change.affected, change.columns)
         return change
 
     def undo_last(self):
-        frame, dirty = self.undo.peek()
+        frame = self.undo.peek()
         # 重新计算成功后才移除快照，失败时仍可重试撤销。
         result = detect_quality(frame, self.settings)
         analysis = analyze(frame)
         self.undo.pop()
-        self.frame, self.result, self.analysis, self.dirty = frame, result, analysis, dirty
+        self.frame, self.result, self.analysis = frame, result, analysis
+        self.dirty = not self.frame.equals(self._saved_frame)
         self.record("撤销", "恢复上一步清洗之前的数据状态", len(frame))
+
+    def mark_saved(self):
+        # 数据状态只替换、不就地修改，保存引用即可，无需复制整份数据。
+        self._saved_frame = self.frame
+        self.dirty = False
 
     def record(self, operation, description, affected=0, columns=None, success=True):
         self.records.append(OperationRecord(operation, description, affected, "、".join(map(str, columns or [])), success))

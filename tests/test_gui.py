@@ -27,6 +27,7 @@ def qt_app():
 def window(qt_app, tmp_path, monkeypatch):
     win = MainWindow(ConfigStore(tmp_path / "config.json"))
     monkeypatch.setattr(QMessageBox, "warning", lambda *args: None)
+    monkeypatch.setattr(win, "confirm_cleaning", lambda *args: True)
     win.show()
     qt_app.processEvents()
     yield win
@@ -323,4 +324,73 @@ def test_cleaning_fields_and_parameter_visibility(window):
     page.operation.setCurrentText("文本批量替换")
     assert not page.old.isHidden() and not page.new.isHidden()
     assert page.method.isHidden()
+
+
+@pytest.mark.parametrize("accept", [False, True])
+def test_cleaning_preview_cancel_or_apply_real_dialog(window, monkeypatch, accept):
+    from app.ui.widgets.cleaning_preview import CleaningPreviewDialog
+
+    window.manager.load(pd.DataFrame({"姓名": [" Alice ", "Bob"]}), {"name": "preview.csv"})
+    window.refresh()
+    original = window.manager.frame
+    records = len(window.manager.records)
+    monkeypatch.setattr(window, "confirm_cleaning", MainWindow.confirm_cleaning.__get__(window))
+    shown = []
+
+    def choose():
+        dialog = QApplication.activeModalWidget()
+        if not isinstance(dialog, CleaningPreviewDialog):
+            QTimer.singleShot(10, choose)
+            return
+        shown.append(dialog)
+        assert window.manager.frame is original
+        assert len(window.manager.records) == records
+        assert "影响 1 条记录" in dialog.summary.text()
+        assert dialog.table.model().data(dialog.table.model().index(0, 2)) == "' Alice '"
+        QTest.mouseClick(dialog.apply_button if accept else dialog.cancel_button, Qt.LeftButton)
+
+    QTimer.singleShot(10, choose)
+    window.preview_clean("文本去除前后空格", ["姓名"], {})
+    wait_ready(window)
+    assert len(shown) == 1
+    assert len(window.manager.undo) == int(accept)
+    assert len(window.manager.records) == records + int(accept)
+    assert window.manager.dirty == accept
+    assert window.manager.frame["姓名"].iloc[0] == ("Alice" if accept else " Alice ")
+
+
+def test_cleaning_preview_noop_disables_apply(window):
+    from app.core.cleaning_preview import preview_cleaning
+    from app.ui.widgets.cleaning_preview import CleaningPreviewDialog
+
+    frame = pd.DataFrame({"姓名": ["Alice"]})
+    change, samples = preview_cleaning(frame, "文本去除前后空格", ["姓名"])
+    dialog = CleaningPreviewDialog(frame, change, samples, window)
+    assert not dialog.apply_button.isEnabled()
+    assert dialog.cancel_button.isDefault()
+    dialog.close()
+
+
+def test_export_then_undo_warns_before_closing_and_failed_export_stays_dirty(window, tmp_path):
+    from PySide6.QtGui import QCloseEvent
+
+    window.manager.load(pd.DataFrame({"姓名": [" Alice "]}), {"name": "demo.csv"})
+    window.apply_clean("文本去除前后空格", ["姓名"], {})
+    wait_ready(window)
+    window.export_to(tmp_path / "saved.csv")
+    wait_ready(window)
+    assert not window.manager.dirty
+    window.undo()
+    wait_ready(window)
+    assert window.manager.dirty
+    prompts = []
+    window.confirm = lambda *args: prompts.append(args) or False
+    event = QCloseEvent()
+    window.closeEvent(event)
+    assert not event.isAccepted()
+    assert prompts[0][0] == "退出软件"
+    window.export_to(tmp_path / "不存在的目录" / "failed.csv")
+    wait_ready(window)
+    assert window.last_error
+    assert window.manager.dirty
 

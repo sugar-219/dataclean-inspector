@@ -171,3 +171,30 @@ def test_empty_undo_has_clear_error():
     for operation in [history.peek, history.pop]:
         with pytest.raises(ValueError, match="没有可撤销"):
             operation()
+
+
+def test_undo_after_export_tracks_latest_saved_data():
+    manager = DataManager()
+    manager.load(pd.DataFrame({"name": [" Alice ", "Bob"]}), {"name": "demo.csv"})
+    manager.apply("文本去除前后空格", ["name"])
+    manager.mark_saved()
+    assert not manager.dirty
+    manager.undo_last()
+    assert manager.dirty
+    manager.apply("文本去除前后空格", ["name"])
+    assert not manager.dirty
+
+
+def test_undo_to_saved_state_and_new_file_reset_saved_baseline():
+    manager = DataManager()
+    manager.load(pd.DataFrame({"name": [" Alice "]}), {"name": "first.csv"})
+    manager.apply("文本去除前后空格", ["name"])
+    manager.mark_saved()
+    manager.apply("大小写转换", ["name"], case="全部大写")
+    assert manager.dirty
+    manager.undo_last()
+    assert not manager.dirty
+    manager.load(pd.DataFrame({"name": [" Bob "]}), {"name": "second.csv"})
+    manager.apply("文本去除前后空格", ["name"])
+    manager.undo_last()
+    assert not manager.dirty

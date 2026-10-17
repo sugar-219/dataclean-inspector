@@ -6,14 +6,16 @@ import pandas as pd
 from PySide6.QtGui import QShortcut, QKeySequence
 from PySide6.QtCore import QSize
 from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QFrame, QLabel,
-    QListWidget, QStackedWidget, QProgressBar, QFileDialog, QMessageBox, QInputDialog, QScrollArea)
+    QListWidget, QStackedWidget, QProgressBar, QFileDialog, QMessageBox, QInputDialog, QScrollArea, QDialog)
 from app import APP_NAME
 from app.core.data_manager import DataManager
+from app.core.cleaning_preview import preview_cleaning
 from app.core.file_loader import load_file, sheet_names, export_data
 from app.core.report_generator import generate_report, export_report
 from app.ui.widgets.common import button, NoticeBar
 from app.ui.widgets.icons import navigation_icon
 from app.ui.widgets.worker import Worker
+from app.ui.widgets.cleaning_preview import CleaningPreviewDialog
 from app.ui.pages.home_page import HomePage
 from app.ui.pages.preview_page import PreviewPage
 from app.core.data_query import search_positions
@@ -105,7 +107,7 @@ class MainWindow(QMainWindow):
         self.home.quality_requested.connect(lambda: self.navigation.setCurrentRow(2))
         self.preview.search_requested.connect(self.search)
         self.quality.detect_requested.connect(self.detect)
-        self.cleaning.apply_requested.connect(self.apply_clean)
+        self.cleaning.apply_requested.connect(self.preview_clean)
         self.cleaning.undo_requested.connect(self.undo)
         self.report.export_requested.connect(self.export_report_dialog)
         self.history.clear_requested.connect(self.clear_history)
@@ -242,12 +244,37 @@ class MainWindow(QMainWindow):
                 return generate_report(self.manager)
             self.run_job("质量检测", run, self.refresh)
 
-    def apply_clean(self, operation, columns, params):
+    def confirm_cleaning(self, change, samples):
+        dialog = CleaningPreviewDialog(self.manager.frame, change, samples, self)
+        try:
+            return dialog.exec() == QDialog.Accepted
+        finally:
+            dialog.deleteLater()
+
+    def preview_clean(self, operation, columns, params):
+        if not self.has_data():
+            return
+        source = self.manager.frame
+
+        def ready(prepared):
+            change, samples = prepared
+            if self.confirm_cleaning(change, samples):
+                if self.manager.frame is not source:
+                    raise ValueError("数据已发生变化，请重新预览后再应用。")
+                self.apply_clean(operation, columns, params, change)
+            else:
+                self.statusBar().showMessage("已取消清洗，当前数据未改变。", 8000)
+        self.run_job("生成清洗预览", lambda: preview_cleaning(source, operation, columns, **params), ready)
+
+    def apply_clean(self, operation, columns, params, prepared=None):
         if not self.has_data():
             return
 
         def run():
-            self.manager.apply(operation, columns, **params)
+            if prepared is None:
+                self.manager.apply(operation, columns, **params)
+            else:
+                self.manager.commit_clean(operation, prepared)
             return generate_report(self.manager)
         self.run_job(operation, run, self.refresh)
 
@@ -297,7 +324,7 @@ class MainWindow(QMainWindow):
     def export_to(self, target):
         def export():
             export_data(self.manager.frame, target, self.manager.metadata.get("path"), allow_overwrite=True)
-            self.manager.dirty = False
+            self.manager.mark_saved()
             self.manager.record("导出数据", str(target), len(self.manager.frame))
             return str(target)
 
